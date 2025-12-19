@@ -22,3 +22,18 @@ vim.keymap.set("n", "X", '"_X', opts) -- delete backward char (no yank)
 -- Yank to system clipboard
 vim.keymap.set("v", "<leader>y", '"+y', { desc = 'Yank to system clipboard "+y' })
 vim.keymap.set("v", "<leader>p", '"+p', { desc = 'Paste from system clipboard "+p' })
+
+local wk = require("which-key")
+
+-- For bufferline
+-- jump to buffer by number
+local bufferline = require("bufferline")
+for i = 1, 9 do
+  wk.add({
+    "<leader>" .. i,
+    function()
+      bufferline.go_to(i, true)
+    end,
+    -- omit desc so it won't show up in which-key
+  })
+end
