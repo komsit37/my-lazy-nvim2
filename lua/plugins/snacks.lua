@@ -80,16 +80,17 @@ return {
       function()
         require("user.enhanced-lsp-refs").enhanced_references()
       end,
-      desc = "Enhanced LSP References",
+      desc = "Find References (LSP)",
       mode = "n",
     },
-    {
-      "<leader>cH",
-      function()
-        require("user.enhanced-lsp-refs").grep_references()
-      end,
-      desc = "Grep-style LSP References",
-      mode = "n",
-    },
+    -- I forgot the use case for this one?
+    -- {
+    --   "<leader>cH",
+    --   function()
+    --     require("user.enhanced-lsp-refs").grep_references()
+    --   end,
+    --   desc = "Find References (LSP/simple)",
+    --   mode = "n",
+    -- },
   },
 }

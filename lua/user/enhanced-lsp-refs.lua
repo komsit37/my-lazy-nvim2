@@ -1,4 +1,5 @@
--- Enhanced LSP References Picker with Syntax Highlighting
+-- Enhanced LSP references: full UI with icons/paths + enriched line content.
+-- Grep references: compact "file:line: content" format using the same finder/enrichment.
 local M = {}
 
 -- Enhanced format function for LSP references
