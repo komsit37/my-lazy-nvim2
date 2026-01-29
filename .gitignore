@@ -5,7 +5,9 @@ debug
 .repro
 foo.*
 *.log
+.nvimlog
 data
 target/
+test/attachments/
 
 .neoconf.json
