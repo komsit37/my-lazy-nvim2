@@ -16,12 +16,17 @@ local function ensure_dir(path)
   vim.fn.mkdir(path, "p")
 end
 
-local function compute_target_px()
+local function compute_target_px(scale)
+  local factor = tonumber(scale) or 1.0
+  if factor <= 0 then factor = 1.0 end
+
   local default_max_w, default_max_h = 1600, 1200
+  local fallback_w = math.max(300, math.floor(default_max_w * factor))
+  local fallback_h = math.max(200, math.floor(default_max_h * factor))
 
   local ok, term = pcall(require, "image/utils/term")
   if not ok then
-    return default_max_w, default_max_h
+    return fallback_w, fallback_h
   end
 
   local size = term.get_size()
@@ -29,16 +34,29 @@ local function compute_target_px()
   local win_rows = vim.api.nvim_win_get_height(0)
 
   if not size or size.cell_width <= 0 or size.cell_height <= 0 then
-    return default_max_w, default_max_h
+    return fallback_w, fallback_h
   end
 
-  local max_w = math.floor(win_cols * size.cell_width * 0.9)
-  local max_h = math.floor(win_rows * size.cell_height * 0.5)
+  local max_w = math.floor(win_cols * size.cell_width * 0.9 * factor)
+  local max_h = math.floor(win_rows * size.cell_height * 0.5 * factor)
 
-  if max_w < 300 then max_w = default_max_w end
-  if max_h < 200 then max_h = default_max_h end
+  if max_w < 300 then max_w = fallback_w end
+  if max_h < 200 then max_h = fallback_h end
 
   return max_w, max_h
+end
+
+local function size_scale(size)
+  if size == "small" or size == "s" then
+    return 0.6
+  end
+  if size == "medium" or size == "m" then
+    return 0.8
+  end
+  if size == "large" or size == "l" then
+    return 1.0
+  end
+  return 1.0
 end
 
 local function next_number(dir, base, date)
@@ -84,7 +102,7 @@ local function run(cmd, on_exit)
   end)
 end
 
-function M.paste_markdown_image()
+function M.paste_markdown_image(size)
   if vim.env.SSH_TTY or vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT then
     notify("Clipboard image paste usually won't work over remote SSH. Paste locally or transfer the file.", vim.log.levels.WARN)
   end
@@ -180,7 +198,7 @@ function M.paste_markdown_image()
       return
     end
 
-    local max_w, max_h = compute_target_px()
+    local max_w, max_h = compute_target_px(size_scale(size))
     local resize = string.format("%dx%d>", max_w, max_h)
 
     local magick = vim.fn.executable("magick") == 1 and "magick" or "convert"

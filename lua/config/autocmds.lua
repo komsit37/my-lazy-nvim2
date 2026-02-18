@@ -13,8 +13,16 @@ vim.api.nvim_create_autocmd("FileType", {
   group = group,
   pattern = { "markdown", "markdown.mdx" },
   callback = function(event)
-    vim.keymap.set("n", "<leader>mi", function()
-      require("user.paste-image").paste_markdown_image()
-    end, { buffer = event.buf, desc = "Markdown: Paste Image from Clipboard" })
+    vim.keymap.set("n", "<leader>mis", function()
+      require("user.paste-image").paste_markdown_image("small")
+    end, { buffer = event.buf, desc = "Markdown: Paste Image (Small)" })
+
+    vim.keymap.set("n", "<leader>mim", function()
+      require("user.paste-image").paste_markdown_image("medium")
+    end, { buffer = event.buf, desc = "Markdown: Paste Image (Medium)" })
+
+    vim.keymap.set("n", "<leader>mil", function()
+      require("user.paste-image").paste_markdown_image("large")
+    end, { buffer = event.buf, desc = "Markdown: Paste Image (Large)" })
   end,
 })
