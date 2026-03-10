@@ -151,3 +151,65 @@ vim.keymap.set("n", "[<tab>", "<cmd>tabprevious<cr>zz", { desc = "Prev Tab (cent
 -- 2) For maximum consistency, you can add zz to ANY other “jump” you use often:
 --    :cnext/:cprev, :lnext/:lprev, ]m/[m, etc.
 -- 3) If you ever want "match anything ]+?" you need expr mapping; static maps can’t.
+
+local function set_hledger_keymaps(bufnr)
+  if vim.b[bufnr].hledger_keymaps_set then
+    return
+  end
+
+  local hledger = require("user.hledger")
+  local function map(lhs, rhs, desc)
+    vim.keymap.set("n", lhs, rhs, { buffer = bufnr, desc = desc, silent = true })
+  end
+
+  map("<leader>hc", function()
+    hledger.run("check", bufnr)
+  end, "hledger Check")
+
+  map("<leader>hb", function()
+    hledger.run("bse", bufnr)
+  end, "hledger Balance Sheet")
+
+  map("<leader>hi", function()
+    hledger.run("is", bufnr)
+  end, "hledger Income Statement")
+
+  map("<leader>hp", function()
+    hledger.print_prompt(bufnr)
+  end, "hledger Print")
+
+  map("<leader>hr", function()
+    hledger.register_prompt(bufnr)
+  end, "hledger Register")
+
+  map("<leader>hP", function()
+    hledger.print_current(bufnr)
+  end, "hledger Print Current")
+
+  map("<leader>hR", function()
+    hledger.register_current(bufnr)
+  end, "hledger Register Current")
+
+  vim.b[bufnr].hledger_keymaps_set = true
+end
+
+local function is_hledger_candidate(bufnr)
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  return name:match("%.journal$") or name:match("%.ledger$") or name:match("%.ldg$") or name:match("%.rules$")
+end
+
+local function maybe_set_hledger_keymaps(bufnr)
+  local hledger = require("user.hledger")
+  if is_hledger_candidate(bufnr) and hledger.is_project(bufnr) then
+    set_hledger_keymaps(bufnr)
+  end
+end
+
+vim.api.nvim_create_autocmd({ "BufEnter", "BufNewFile", "BufWinEnter" }, {
+  pattern = { "*.journal", "*.ledger", "*.ldg", "*.rules" },
+  callback = function(event)
+    maybe_set_hledger_keymaps(event.buf)
+  end,
+})
+
+maybe_set_hledger_keymaps(vim.api.nvim_get_current_buf())
