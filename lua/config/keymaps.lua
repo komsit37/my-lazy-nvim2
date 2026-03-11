@@ -174,21 +174,25 @@ local function set_hledger_keymaps(bufnr)
     hledger.run("is", bufnr)
   end, "hledger Income Statement")
 
+  map("<leader>ha", function()
+    hledger.run("accounts --tree", bufnr)
+  end, "hledger Account Tree")
+
   map("<leader>hp", function()
-    hledger.print_prompt(bufnr)
-  end, "hledger Print")
+    hledger.print_picker(bufnr)
+  end, "hledger Print Account Picker")
 
   map("<leader>hr", function()
-    hledger.register_prompt(bufnr)
-  end, "hledger Register")
+    hledger.register_picker(bufnr)
+  end, "hledger Register Account Picker")
 
   map("<leader>hP", function()
-    hledger.print_current(bufnr)
-  end, "hledger Print Current")
+    hledger.print_prompt(bufnr)
+  end, "hledger Print Prompt")
 
   map("<leader>hR", function()
-    hledger.register_current(bufnr)
-  end, "hledger Register Current")
+    hledger.register_prompt(bufnr)
+  end, "hledger Register Prompt")
 
   vim.b[bufnr].hledger_keymaps_set = true
 end
@@ -198,17 +202,42 @@ local function is_hledger_candidate(bufnr)
   return name:match("%.journal$") or name:match("%.ledger$") or name:match("%.ldg$") or name:match("%.rules$")
 end
 
+local function should_set_hledger_keymaps(bufnr)
+  if is_hledger_candidate(bufnr) then
+    return true
+  end
+
+  if vim.bo[bufnr].buftype ~= "" then
+    return false
+  end
+
+  local hledger = require("user.hledger")
+  return hledger.find_project_root(bufnr) ~= nil and hledger.find_main_file(bufnr) ~= nil
+end
+
 local function maybe_set_hledger_keymaps(bufnr)
   local hledger = require("user.hledger")
-  if is_hledger_candidate(bufnr) and hledger.is_project(bufnr) then
+  if should_set_hledger_keymaps(bufnr) and hledger.is_project(bufnr) then
     set_hledger_keymaps(bufnr)
   end
 end
 
 vim.api.nvim_create_autocmd({ "BufEnter", "BufNewFile", "BufWinEnter" }, {
-  pattern = { "*.journal", "*.ledger", "*.ldg", "*.rules" },
+  pattern = "*",
   callback = function(event)
     maybe_set_hledger_keymaps(event.buf)
+  end,
+})
+
+vim.api.nvim_create_autocmd("DirChanged", {
+  callback = function()
+    maybe_set_hledger_keymaps(vim.api.nvim_get_current_buf())
+  end,
+})
+
+vim.api.nvim_create_autocmd("VimEnter", {
+  callback = function()
+    maybe_set_hledger_keymaps(vim.api.nvim_get_current_buf())
   end,
 })
 

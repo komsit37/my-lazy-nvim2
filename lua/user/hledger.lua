@@ -142,6 +142,21 @@ local function has_explicit_input(args)
     or args:match("(^|%s)%-%-rules%-file(%s|=)") ~= nil
 end
 
+local function has_explicit_input_parts(parts)
+  for index, part in ipairs(parts or {}) do
+    if part == "-f" or part == "--file" or part == "--rules-file" then
+      return true
+    end
+    if vim.startswith(part, "--file=") or vim.startswith(part, "--rules-file=") then
+      return true
+    end
+    if part == "-f" and parts[index + 1] then
+      return true
+    end
+  end
+  return false
+end
+
 local function trim(value)
   return vim.trim(value or "")
 end
@@ -474,6 +489,36 @@ local function build_command(args, bufnr)
   return table.concat(cmd, " ")
 end
 
+local function build_job_spec(parts, bufnr, opts)
+  local bin = M.binary()
+  if not bin then
+    notify("`hledger` is not available in PATH", vim.log.levels.ERROR)
+    return nil
+  end
+
+  bufnr = normalize_bufnr(bufnr)
+  opts = opts or {}
+
+  local root = M.find_root(bufnr)
+  local use_direnv = vim.fn.executable("direnv") == 1 and vim.fn.filereadable(vim.fs.joinpath(root, ".envrc")) == 1
+  local cmd = use_direnv and { "direnv", "exec", ".", bin } or { bin }
+
+  if not use_direnv and not has_explicit_input_parts(parts) then
+    local main_file = M.find_main_file(bufnr)
+    if main_file then
+      vim.list_extend(cmd, { "-f", main_file })
+    end
+  end
+
+  vim.list_extend(cmd, opts.common_flags or {})
+  vim.list_extend(cmd, parts or {})
+
+  return {
+    cmd = cmd,
+    cwd = root,
+  }
+end
+
 local function open_float(cmd)
   local width = math.min(math.floor(vim.o.columns * 0.9), 160)
   local height = math.min(math.floor(vim.o.lines * 0.8), 40)
@@ -507,19 +552,149 @@ local function open_float(cmd)
     end
   end, { buffer = buf, silent = true, desc = "Close hledger window" })
 
+  vim.keymap.set("t", "q", function()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end, { buffer = buf, silent = true, desc = "Close hledger window" })
+
   vim.fn.termopen({ "zsh", "-lc", cmd }, {
     on_exit = function()
       if vim.api.nvim_buf_is_valid(buf) then
         vim.schedule(function()
           if vim.api.nvim_buf_is_valid(buf) then
             vim.bo[buf].modifiable = false
+            if vim.api.nvim_win_is_valid(win) and vim.api.nvim_get_current_win() == win then
+              vim.cmd("stopinsert")
+            end
           end
         end)
       end
     end,
   })
+end
 
-  vim.cmd("startinsert")
+local function run_system(spec)
+  local result = vim.system(spec.cmd, {
+    cwd = spec.cwd,
+    text = true,
+  }):wait()
+
+  if result.code ~= 0 then
+    local message = trim(result.stderr ~= "" and result.stderr or result.stdout)
+    notify(message ~= "" and message or "hledger command failed", vim.log.levels.ERROR)
+    return nil
+  end
+
+  return result
+end
+
+local function list_accounts(bufnr)
+  local spec = build_job_spec({ "--pager=no", "--color=never", "accounts", "--flat" }, bufnr)
+  if not spec then
+    return {}
+  end
+
+  local result = run_system(spec)
+  if not result then
+    return {}
+  end
+
+  local lines = vim.split(trim(result.stdout or ""), "\n", { trimempty = true })
+  return vim.tbl_filter(function(line)
+    return trim(line) ~= ""
+  end, lines)
+end
+
+local function picker_account_query(bufnr)
+  if is_rules_buffer(bufnr) then
+    return find_rules_account(bufnr) or get_last_args("reg", bufnr) or ""
+  end
+
+  local row, col = unpack(cursor_pos(bufnr))
+  local line = get_lines(bufnr)[row] or ""
+  local token = account_token_under_cursor(line, col)
+  if token then
+    return token
+  end
+
+  local context = find_transaction_context(bufnr)
+  if context and context.account then
+    return context.account
+  end
+
+  return get_last_args("reg", bufnr) or ""
+end
+
+local function preview_command(ctx)
+  local preview = require("snacks.picker.preview")
+  local item = ctx.item
+  if not item or not item.account then
+    return preview.none(ctx)
+  end
+
+  local spec = build_job_spec({
+    "--pager=no",
+    "--color=yes",
+    item.subcommand,
+    item.account,
+  }, item.bufnr)
+  if not spec then
+    return preview.none(ctx)
+  end
+
+  ctx.preview:set_title(item.preview_title or (item.subcommand .. " " .. item.account))
+  return preview.cmd(spec.cmd, ctx, {
+    cwd = spec.cwd,
+  })
+end
+
+local function open_picker(subcommand, title, bufnr)
+  bufnr = normalize_bufnr(bufnr)
+
+  local ok, snacks = pcall(require, "snacks")
+  if not ok then
+    notify("Snacks picker is not available", vim.log.levels.ERROR)
+    return
+  end
+
+  local accounts = list_accounts(bufnr)
+  if #accounts == 0 then
+    notify("No hledger accounts found", vim.log.levels.WARN)
+    return
+  end
+
+  local items = vim.tbl_map(function(account)
+    return {
+      text = account,
+      account = account,
+      bufnr = bufnr,
+      subcommand = subcommand,
+      preview_title = subcommand .. " " .. account,
+    }
+  end, accounts)
+
+  snacks.picker({
+    title = title,
+    items = items,
+    format = "text",
+    preview = preview_command,
+    search = picker_account_query(bufnr),
+    confirm = function(picker, item)
+      picker:close()
+      if not item or not item.account then
+        return
+      end
+      set_last_args(subcommand, item.account, bufnr)
+      M.run(subcommand .. " " .. shellescape(item.account), bufnr)
+    end,
+    matcher = {
+      fuzzy = true,
+      smartcase = true,
+      ignorecase = true,
+    },
+    layout = "default",
+  })
 end
 
 function M.command(args, bufnr)
@@ -561,6 +736,14 @@ end
 
 function M.register_prompt(bufnr)
   prompt_and_run("reg", "hledger reg args: ", M.default_register_args(bufnr), bufnr)
+end
+
+function M.print_picker(bufnr)
+  open_picker("print", "hledger Print Accounts", bufnr)
+end
+
+function M.register_picker(bufnr)
+  open_picker("reg", "hledger Register Accounts", bufnr)
 end
 
 function M.print_current(bufnr)
