@@ -70,11 +70,14 @@ hi def link hledgerPNegAmount DiagnosticError
 hi def link hledgerPComment   Comment
 hi def link hledgerPTag       Tag
 
-" Account types — same links as hledgerreport.vim
-hi def link hledgerPAsset     Identifier
-hi def link hledgerPLiability Special
-hi def link hledgerPEquity    PreProc
-hi def link hledgerPIncome    Statement
-hi def link hledgerPExpense   Function
+" Account types — semantic accounting colors
+"   positive (asset, income)  → green
+"   negative (liability, expense) → red
+"   neutral  (equity) → muted
+hi def link hledgerPAsset     DiagnosticOk
+hi def link hledgerPIncome    DiagnosticOk
+hi def link hledgerPLiability DiagnosticError
+hi def link hledgerPExpense   DiagnosticError
+hi def link hledgerPEquity    NonText
 
 let b:current_syntax = "hledger_preview"

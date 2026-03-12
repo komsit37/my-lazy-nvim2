@@ -633,8 +633,11 @@ local function preview_command(ctx)
     return preview.none(ctx)
   end
 
+  local width = vim.api.nvim_win_get_width(ctx.win)
   local spec = build_job_spec({
     "--color=never",
+    "-w",
+    tostring(width),
     item.subcommand,
     item.account,
   }, item.bufnr)
