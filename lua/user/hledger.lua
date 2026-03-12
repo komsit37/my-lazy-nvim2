@@ -519,6 +519,21 @@ local function build_job_spec(parts, bufnr, opts)
   }
 end
 
+local function run_system(spec)
+  local result = vim.system(spec.cmd, {
+    cwd = spec.cwd,
+    text = true,
+  }):wait()
+
+  if result.code ~= 0 then
+    local message = trim(result.stderr ~= "" and result.stderr or result.stdout)
+    notify(message ~= "" and message or "hledger command failed", vim.log.levels.ERROR)
+    return nil
+  end
+
+  return result
+end
+
 local function open_float(cmd)
   local width = math.min(math.floor(vim.o.columns * 0.9), 160)
   local height = math.min(math.floor(vim.o.lines * 0.8), 40)
@@ -574,19 +589,63 @@ local function open_float(cmd)
   })
 end
 
-local function run_system(spec)
-  local result = vim.system(spec.cmd, {
-    cwd = spec.cwd,
-    text = true,
-  }):wait()
-
-  if result.code ~= 0 then
-    local message = trim(result.stderr ~= "" and result.stderr or result.stdout)
-    notify(message ~= "" and message or "hledger command failed", vim.log.levels.ERROR)
-    return nil
+local function open_float_with_syntax(args, syntax, bufnr)
+  bufnr = normalize_bufnr(bufnr)
+  local spec = build_job_spec(vim.split("--color=never " .. args, "%s+"), bufnr)
+  if not spec then
+    return
   end
 
-  return result
+  local result = run_system(spec)
+  if not result then
+    return
+  end
+
+  local lines = vim.split(trim(result.stdout or ""), "\n")
+  if #lines == 0 then
+    notify("No output from hledger", vim.log.levels.WARN)
+    return
+  end
+
+  local max_line = 0
+  for _, line in ipairs(lines) do
+    max_line = math.max(max_line, vim.fn.strdisplaywidth(line))
+  end
+
+  local width = math.min(math.max(max_line + 2, 40), math.floor(vim.o.columns * 0.9))
+  local height = math.min(#lines + 1, math.floor(vim.o.lines * 0.8))
+  local row = math.floor((vim.o.lines - height) / 2 - 1)
+  local col = math.floor((vim.o.columns - width) / 2)
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].syntax = syntax
+
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.max(row, 0),
+    col = math.max(col, 0),
+    style = "minimal",
+    border = "rounded",
+    title = " hledger ",
+    title_pos = "center",
+  })
+
+  vim.wo[win].number = false
+  vim.wo[win].relativenumber = false
+  vim.wo[win].signcolumn = "no"
+  vim.wo[win].wrap = false
+  vim.wo[win].cursorline = true
+
+  vim.keymap.set("n", "q", function()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end, { buffer = buf, silent = true, desc = "Close hledger window" })
 end
 
 local function list_accounts(bufnr)
@@ -715,6 +774,10 @@ function M.run(args, bufnr)
   end
 
   open_float(cmd)
+end
+
+function M.run_report(args, syntax, bufnr)
+  open_float_with_syntax(args, syntax or "hledgerreport", bufnr)
 end
 
 local function prompt_and_run(base_cmd, prompt, default, bufnr)

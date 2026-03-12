@@ -167,11 +167,11 @@ local function set_hledger_keymaps(bufnr)
   end, "hledger Check")
 
   map("<leader>hb", function()
-    hledger.run("bse -V -X USD", bufnr)
+    hledger.run_report("bse -V -X USD", "hledgerreport", bufnr)
   end, "hledger Balance Sheet (USD)")
 
   map("<leader>hi", function()
-    hledger.run("is -V -X USD", bufnr)
+    hledger.run_report("is -V -X USD", "hledgerreport", bufnr)
   end, "hledger Income Statement (USD)")
 
   map("<leader>ha", function()
