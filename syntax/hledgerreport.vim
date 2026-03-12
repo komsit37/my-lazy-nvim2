@@ -29,15 +29,15 @@ hi def link hledgerReportDate Constant
 hi def link hledgerReportCurrency Type
 hi def link hledgerReportAmount Number
 
-hi def link hledgerReportAssetsSection DiagnosticOk
-hi def link hledgerReportLiabilitiesSection DiagnosticError
+hi def link hledgerReportAssetsSection DiagnosticInfo
+hi def link hledgerReportLiabilitiesSection DiagnosticWarn
 hi def link hledgerReportEquitySection NonText
 hi def link hledgerReportRevenuesSection DiagnosticOk
 hi def link hledgerReportExpensesSection DiagnosticError
 hi def link hledgerReportNetSection Title
 
-hi def link hledgerReportAssets DiagnosticOk
-hi def link hledgerReportLiabilities DiagnosticError
+hi def link hledgerReportAssets DiagnosticInfo
+hi def link hledgerReportLiabilities DiagnosticWarn
 hi def link hledgerReportEquity NonText
 hi def link hledgerReportIncome DiagnosticOk
 hi def link hledgerReportExpenses DiagnosticError

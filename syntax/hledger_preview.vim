@@ -71,12 +71,14 @@ hi def link hledgerPComment   Comment
 hi def link hledgerPTag       Tag
 
 " Account types — semantic accounting colors
-"   positive (asset, income)  → green
-"   negative (liability, expense) → red
-"   neutral  (equity) → muted
-hi def link hledgerPAsset     DiagnosticOk
+"   asset     → blue   (stable, what you hold)
+"   income    → green  (growth, money coming in)
+"   liability → orange (caution, obligations)
+"   expense   → red    (spending, money going out)
+"   equity    → gray   (neutral, balancing)
+hi def link hledgerPAsset     DiagnosticInfo
 hi def link hledgerPIncome    DiagnosticOk
-hi def link hledgerPLiability DiagnosticError
+hi def link hledgerPLiability DiagnosticWarn
 hi def link hledgerPExpense   DiagnosticError
 hi def link hledgerPEquity    NonText
 
