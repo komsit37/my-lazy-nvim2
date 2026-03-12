@@ -590,7 +590,7 @@ local function run_system(spec)
 end
 
 local function list_accounts(bufnr)
-  local spec = build_job_spec({ "--pager=no", "--color=never", "accounts", "--flat" }, bufnr)
+  local spec = build_job_spec({ "--color=never", "accounts", "--flat" }, bufnr)
   if not spec then
     return {}
   end
@@ -634,8 +634,7 @@ local function preview_command(ctx)
   end
 
   local spec = build_job_spec({
-    "--pager=no",
-    "--color=yes",
+    "--color=never",
     item.subcommand,
     item.account,
   }, item.bufnr)
@@ -644,9 +643,14 @@ local function preview_command(ctx)
   end
 
   ctx.preview:set_title(item.preview_title or (item.subcommand .. " " .. item.account))
-  return preview.cmd(spec.cmd, ctx, {
+  local job = preview.cmd(spec.cmd, ctx, {
     cwd = spec.cwd,
+    ft = "hledger_preview",
   })
+  -- preview.cmd skips highlight when previewers.diff.style == "fancy",
+  -- so apply hledger_preview syntax directly on the preview buffer.
+  vim.bo[ctx.preview.win.buf].syntax = "hledger_preview"
+  return job
 end
 
 local function open_picker(subcommand, title, bufnr)
@@ -744,6 +748,10 @@ end
 
 function M.register_picker(bufnr)
   open_picker("reg", "hledger Register Accounts", bufnr)
+end
+
+function M.aregister_picker(bufnr)
+  open_picker("areg", "hledger Account Register", bufnr)
 end
 
 function M.print_current(bufnr)

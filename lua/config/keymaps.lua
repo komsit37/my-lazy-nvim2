@@ -175,8 +175,8 @@ local function set_hledger_keymaps(bufnr)
   end, "hledger Income Statement")
 
   map("<leader>ha", function()
-    hledger.run("accounts --tree", bufnr)
-  end, "hledger Account Tree")
+    hledger.aregister_picker(bufnr)
+  end, "hledger Account Register Picker")
 
   map("<leader>hp", function()
     hledger.print_picker(bufnr)
