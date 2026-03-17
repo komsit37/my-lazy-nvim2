@@ -464,17 +464,9 @@ local function build_command(args, bufnr)
   local root = M.find_root(bufnr)
   local cmd = { "cd", shellescape(root), "&&" }
 
-  if vim.fn.executable("direnv") == 1 and vim.fn.filereadable(vim.fs.joinpath(root, ".envrc")) == 1 then
-    table.insert(cmd, "direnv")
-    table.insert(cmd, "exec")
-    table.insert(cmd, ".")
-  end
-
   table.insert(cmd, shellescape(bin))
 
-  if not (vim.fn.executable("direnv") == 1 and vim.fn.filereadable(vim.fs.joinpath(root, ".envrc")) == 1)
-    and not has_explicit_input(args)
-  then
+  if not has_explicit_input(args) then
     local main_file = M.find_main_file(bufnr)
     if main_file then
       table.insert(cmd, "-f")
@@ -500,10 +492,9 @@ local function build_job_spec(parts, bufnr, opts)
   opts = opts or {}
 
   local root = M.find_root(bufnr)
-  local use_direnv = vim.fn.executable("direnv") == 1 and vim.fn.filereadable(vim.fs.joinpath(root, ".envrc")) == 1
-  local cmd = use_direnv and { "direnv", "exec", ".", bin } or { bin }
+  local cmd = { bin }
 
-  if not use_direnv and not has_explicit_input_parts(parts) then
+  if not has_explicit_input_parts(parts) then
     local main_file = M.find_main_file(bufnr)
     if main_file then
       vim.list_extend(cmd, { "-f", main_file })
