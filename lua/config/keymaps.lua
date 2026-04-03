@@ -6,6 +6,9 @@
 vim.keymap.set("n", "x", '"_x', opts) -- delete char (no yank)
 vim.keymap.set("n", "X", '"_X', opts) -- delete backward char (no yank)
 
+-- Move focus to NeoTree (open if closed, focus if open)
+vim.keymap.set("n", "<C-e>", "<cmd>Neotree focus<cr>", { desc = "Focus NeoTree" })
+
 -- Yank to system clipboard
 vim.keymap.set("v", "<leader>y", '"+y', { desc = 'Yank to system clipboard "+y' })
 vim.keymap.set("v", "<leader>p", '"+p', { desc = 'Paste from system clipboard "+p' })
