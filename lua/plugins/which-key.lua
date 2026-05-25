@@ -11,6 +11,9 @@ return {
         -- example to exclude mappings without a description
         return mapping.desc and mapping.desc ~= ""
       end,
+      spec = {
+        { "<leader>gv", group = "diffview" },
+      },
     },
   },
 }
