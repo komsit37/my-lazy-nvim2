@@ -4,6 +4,15 @@ return {
     build = false, -- don't try to build the Lua rock (use ImageMagick CLI instead)
     cmd = { "ImageReport" },
     ft = { "markdown", "markdown.mdx" },
+    -- Load when opening a standalone image file so hijack_file_patterns can render it.
+    event = {
+      "BufReadPre *.png",
+      "BufReadPre *.jpg",
+      "BufReadPre *.jpeg",
+      "BufReadPre *.gif",
+      "BufReadPre *.webp",
+      "BufReadPre *.avif",
+    },
     dependencies = { "nvim-lua/plenary.nvim" },
     opts = function()
       return {
