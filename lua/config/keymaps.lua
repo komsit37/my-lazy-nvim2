@@ -61,22 +61,22 @@ vim.keymap.set("n", "%", "%zz", opts) -- matching bracket/paren
 -- These assume the motions already exist (gitsigns/diff/quickfix etc.)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Git hunks (commonly from gitsigns)
-vim.keymap.set("n", "]h", "]hzz", opts) -- next hunk
-vim.keymap.set("n", "[h", "[hzz", opts) -- prev hunk
-vim.keymap.set("n", "]H", "]Hzz", opts) -- last hunk
-vim.keymap.set("n", "[H", "[Hzz", opts) -- first hunk
+vim.keymap.set("n", "]h", "<cmd>lua require('gitsigns').nav_hunk('next')<cr>zz", opts) -- next hunk
+vim.keymap.set("n", "[h", "<cmd>lua require('gitsigns').nav_hunk('prev')<cr>zz", opts) -- prev hunk
+vim.keymap.set("n", "]H", "<cmd>lua require('gitsigns').nav_hunk('last')<cr>zz", opts) -- last hunk
+vim.keymap.set("n", "[H", "<cmd>lua require('gitsigns').nav_hunk('first')<cr>zz", opts) -- first hunk
 
 -- Diff mode changes (built-in)
 vim.keymap.set("n", "]c", "]czz", opts) -- next diff change
 vim.keymap.set("n", "[c", "[czz", opts) -- prev diff change
 
 -- Quickfix list navigation (built-in)
-vim.keymap.set("n", "]q", "]qzz", opts) -- next quickfix item (:cnext)
-vim.keymap.set("n", "[q", "[qzz", opts) -- prev quickfix item (:cprev)
+vim.keymap.set("n", "]q", "<cmd>cnext<cr>zz", opts) -- next quickfix item (:cnext)
+vim.keymap.set("n", "[q", "<cmd>cprev<cr>zz", opts) -- prev quickfix item (:cprev)
 
 -- Location list navigation (built-in)
-vim.keymap.set("n", "]l", "]lzz", opts) -- next loclist item (:lnext)
-vim.keymap.set("n", "[l", "[lzz", opts) -- prev loclist item (:lprev)
+vim.keymap.set("n", "]l", "<cmd>lnext<cr>zz", opts) -- next loclist item (:lnext)
+vim.keymap.set("n", "[l", "<cmd>lprev<cr>zz", opts) -- prev loclist item (:lprev)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Search navigation centering
