@@ -1,4 +1,4 @@
--- walkthrough.nvim — companion module for the `code-walkthrough` Claude skill.
+-- code-explainer — companion module for the `nvim-code-explainer` Claude skill.
 --
 -- Each present() opens its own TABPAGE with an independent walkthrough:
 --   * a per-window LOCATION LIST (so each tab's list is truly independent;
@@ -14,7 +14,7 @@
 --
 -- Tour keymaps (active while any walkthrough exists):
 --   ]w / [w  next/prev (current tab)   <leader>cd  detail (LazyVim float)
---   :Walkthrough next|prev|detail|clear|clearall
+--   :CodeExplain next|prev|detail|clear|clearall
 
 local M = {}
 
@@ -90,14 +90,14 @@ local function render_annotations(tour, data)
 end
 
 local HELP_LINES = {
-  " Walkthrough  —  keys",
+  " Code explainer  —  keys",
   " ─────────────────────────",
   " ]w / [w    next / prev step",
   " <leader>cd show full detail",
   " <CR>       jump (in list below)",
   "",
-  " :Walkthrough clear     close this tab",
-  " :Walkthrough clear_all close all tours",
+  " :CodeExplain clear     close this tab",
+  " :CodeExplain clear_all close all tours",
 }
 
 local function make_scratch(name, lines, ft)
@@ -173,7 +173,7 @@ local function build_loclist(tour, data)
       text = string.format("[%d/%d] %s", i, n, it.label or ""),
     }
   end
-  vim.fn.setloclist(tour.code_win, {}, " ", { title = data.title or "Walkthrough", items = loc })
+  vim.fn.setloclist(tour.code_win, {}, " ", { title = data.title or "Code explainer", items = loc })
 end
 
 local function hud(tour)
@@ -200,8 +200,8 @@ end
 
 -- ── keymaps (global, ref-counted; act on the current tab's tour) ──────────────
 local TOUR_KEYS = {
-  { "]w", function() M.next() end, "Walkthrough: next" },
-  { "[w", function() M.prev() end, "Walkthrough: prev" },
+  { "]w", function() M.next() end, "code-explainer: next" },
+  { "[w", function() M.prev() end, "code-explainer: prev" },
 }
 
 local function set_keymaps()
@@ -275,7 +275,7 @@ end
 local teardown  -- forward declaration (present() replaces an existing tour via it)
 
 function M.present(data)
-  local title = data.title or "Walkthrough"
+  local title = data.title or "Code explainer"
 
   -- Idempotent by default: a present() whose title matches an existing tour
   -- REPLACES it in its own tab instead of stacking a new tab. `new_tab = true`
@@ -325,7 +325,7 @@ function M.present(data)
     if info and info.loclist == 1 then
       local lbuf = vim.api.nvim_win_get_buf(w)
       local function jump() M.jump(vim.fn.line(".")) end
-      vim.keymap.set("n", "<CR>", jump, { buffer = lbuf, silent = true, desc = "Walkthrough: jump to step" })
+      vim.keymap.set("n", "<CR>", jump, { buffer = lbuf, silent = true, desc = "code-explainer: jump to step" })
       vim.keymap.set("n", "o", jump, { buffer = lbuf, silent = true })
     end
   end
@@ -413,9 +413,9 @@ function M.clear_all()
   clear_keymaps()
 end
 
-vim.api.nvim_create_user_command("Walkthrough", function(o)
+vim.api.nvim_create_user_command("CodeExplain", function(o)
   local sub = (o.args ~= "" and o.args) or "next"
-  if M[sub] then M[sub]() else vim.notify("Walkthrough: unknown subcommand " .. sub, vim.log.levels.WARN) end
+  if M[sub] then M[sub]() else vim.notify("code-explainer: unknown subcommand " .. sub, vim.log.levels.WARN) end
 end, {
   nargs = "?",
   complete = function() return { "next", "prev", "detail", "clear", "clear_all" } end,
