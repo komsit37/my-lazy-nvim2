@@ -66,6 +66,13 @@ vim.keymap.set("n", "[h", "<cmd>lua require('gitsigns').nav_hunk('prev')<cr>zz",
 vim.keymap.set("n", "]H", "<cmd>lua require('gitsigns').nav_hunk('last')<cr>zz", opts) -- last hunk
 vim.keymap.set("n", "[H", "<cmd>lua require('gitsigns').nav_hunk('first')<cr>zz", opts) -- first hunk
 
+-- Toggle inline deleted lines + word-level diff together (one chord)
+vim.keymap.set("n", "<leader>ghi", function()
+  local gs = require("gitsigns")
+  gs.toggle_deleted()
+  gs.toggle_word_diff()
+end, { desc = "Toggle inline deleted + word diff", silent = true })
+
 -- Diff mode changes (built-in)
 vim.keymap.set("n", "]c", "]czz", opts) -- next diff change
 vim.keymap.set("n", "[c", "[czz", opts) -- prev diff change
