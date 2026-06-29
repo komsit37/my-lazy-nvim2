@@ -13,6 +13,10 @@ vim.keymap.set("n", "<C-e>", "<cmd>Neotree focus<cr>", { desc = "Focus NeoTree" 
 vim.keymap.set("n", "<C-w>-", "<C-w>s", { desc = "Split window horizontally", remap = true })
 vim.keymap.set("n", "<C-w>s", "<Nop>", { desc = "which_key_ignore" })
 
+-- Window close: <C-w>d closes the current window (consistent "close = d").
+-- Overrides Neovim's default <C-w>d (line diagnostics float); that lives on <leader>cd.
+vim.keymap.set("n", "<C-w>d", "<C-w>c", { desc = "Close window", remap = true })
+
 -- Yank to system clipboard
 vim.keymap.set("v", "<leader>y", '"+y', { desc = 'Yank to system clipboard "+y' })
 vim.keymap.set("v", "<leader>p", '"+p', { desc = 'Paste from system clipboard "+p' })
