@@ -10,7 +10,7 @@ return {
   },
   keys = {
     { "<leader>gvo", "<cmd>DiffviewOpen<cr>", desc = "Open (working tree vs index)" },
-    { "<leader>gvc", "<cmd>DiffviewClose<cr>", desc = "Close" },
+    { "<leader>gvd", "<cmd>DiffviewClose<cr>", desc = "Close" },
     { "<leader>gvt", "<cmd>DiffviewToggleFiles<cr>", desc = "Toggle files panel" },
     { "<leader>gvf", "<cmd>DiffviewFocusFiles<cr>", desc = "Focus files panel" },
     { "<leader>gvr", "<cmd>DiffviewRefresh<cr>", desc = "Refresh" },
