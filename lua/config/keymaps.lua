@@ -9,6 +9,10 @@ vim.keymap.set("n", "X", '"_X', opts) -- delete backward char (no yank)
 -- Move focus to NeoTree (open if closed, focus if open)
 vim.keymap.set("n", "<C-e>", "<cmd>Neotree focus<cr>", { desc = "Focus NeoTree" })
 
+-- Window split: use <C-w>- for horizontal split (replaces default <C-w>s)
+vim.keymap.set("n", "<C-w>-", "<C-w>s", { desc = "Split window horizontally", remap = true })
+vim.keymap.set("n", "<C-w>s", "<Nop>", { desc = "which_key_ignore" })
+
 -- Yank to system clipboard
 vim.keymap.set("v", "<leader>y", '"+y', { desc = 'Yank to system clipboard "+y' })
 vim.keymap.set("v", "<leader>p", '"+p', { desc = 'Paste from system clipboard "+p' })
