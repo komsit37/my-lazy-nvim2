@@ -17,8 +17,29 @@ return {
     { "<leader>gvh", "<cmd>DiffviewFileHistory<cr>", desc = "History (repo)" },
     { "<leader>gvH", "<cmd>DiffviewFileHistory %<cr>", desc = "History (current file)" },
     { "<leader>gvH", "<Esc><cmd>'<,'>DiffviewFileHistory<cr>", mode = "v", desc = "History (selection)" },
-    { "<leader>gvm", "<cmd>DiffviewOpen origin/main...HEAD<cr>", desc = "Diff vs origin/main" },
-    { "<leader>gvM", "<cmd>DiffviewOpen origin/master...HEAD<cr>", desc = "Diff vs origin/master" },
+    {
+      "<leader>gvm",
+      function()
+        -- Prefer main, fall back to master (checks remote-tracking, then local).
+        local function ref_exists(ref)
+          return vim.fn.system({ "git", "rev-parse", "--verify", "--quiet", ref }) ~= ""
+            and vim.v.shell_error == 0
+        end
+        local base
+        for _, ref in ipairs({ "origin/main", "origin/master", "main", "master" }) do
+          if ref_exists(ref) then
+            base = ref
+            break
+          end
+        end
+        if not base then
+          vim.notify("diffview: no main/master branch found", vim.log.levels.WARN)
+          return
+        end
+        vim.cmd("DiffviewOpen " .. base .. "...HEAD")
+      end,
+      desc = "Diff vs main/master",
+    },
     { "<leader>gvs", "<cmd>DiffviewOpen --staged<cr>", desc = "Staged changes" },
   },
   opts = {
