@@ -13,10 +13,10 @@ return {
     },
     layout = {
       prompt_position = "top", -- input at top, list below
-      preview_position = "bottom", -- file list above, preview below
-      -- flex swaps to a stacked layout when the window is narrower than
-      -- flex.size (default 130 cols); force its wrap to also put the list on top.
-      flex = { wrap = "bottom" },
+      preview_position = "right", -- wide terminals: preview on the side
+      -- When the terminal is narrower than flex.size, stack instead: list on
+      -- top, preview at the bottom.
+      flex = { size = 130, wrap = "bottom" },
     },
   },
   lazy = false, -- the plugin lazy-initialises itself
