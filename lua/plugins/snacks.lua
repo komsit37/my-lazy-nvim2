@@ -31,12 +31,12 @@ return {
             height = 0.8,
             {
               box = "vertical",
-              border = true,
+              border = "rounded",
               title = "{title} {live} {flags}",
               { win = "input", height = 1, border = "bottom" },
               { win = "list", border = "none" },
             },
-            { win = "preview", title = "{preview}", border = true, width = 0.6 },
+            { win = "preview", title = "{preview}", border = "rounded", width = 0.6 },
           },
         },
         --   vertical = { layout = { width = 0.9 } },
@@ -75,6 +75,12 @@ return {
     },
   },
   keys = {
+    -- Disable snacks picker keymaps replaced by fff (see plugins/fff.lua)
+    { "<leader><space>", false },
+    { "<leader>ff", false },
+    { "<leader>sg", false },
+    { "<leader>/", false },
+    { "<leader>sw", false, mode = { "n", "x" } },
     {
       "<leader>ch",
       function()
