@@ -4,3 +4,6 @@
 -- vim.o.clipboard = "unnamedplus"
 -- do not yank to system registry, so we can maintain system clipboard
 vim.opt.clipboard = ""
+
+-- snappier which-key / leader-chord popup (LazyVim default is 300ms)
+vim.opt.timeoutlen = 100
