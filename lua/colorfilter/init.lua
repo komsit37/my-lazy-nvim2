@@ -48,6 +48,35 @@ local fields = {
   brightness = { var = "colorfilter_brightness", min = 50, max = 200 },
 }
 
+-- ── Persistence (machine-local state file) ──────────────────────────────────
+local persist_file = vim.fn.stdpath("state") .. "/colorfilter.json"
+
+local function save()
+  local f = io.open(persist_file, "w")
+  if not f then
+    return
+  end
+  f:write(vim.json.encode({
+    enabled = vim.g.colorfilter_enabled,
+    deep_black = vim.g.colorfilter_deep_black,
+    gamma = vim.g.colorfilter_gamma,
+    saturation = vim.g.colorfilter_saturation,
+    brightness = vim.g.colorfilter_brightness,
+  }))
+  f:close()
+end
+
+local function load()
+  local f = io.open(persist_file, "r")
+  if not f then
+    return nil
+  end
+  local content = f:read("*a")
+  f:close()
+  local ok, data = pcall(vim.json.decode, content)
+  return ok and type(data) == "table" and data or nil
+end
+
 -- ── HSL helpers ────────────────────────────────────────────────────────────
 local function rgb_to_hsl(r, g, b)
   r, g, b = r / 255, g / 255, b / 255
@@ -140,6 +169,7 @@ end
 -- Reload the theme so transforms recompute from original colors (no compounding);
 -- the ColorScheme autocmd then re-runs M.apply.
 local function refresh()
+  save() -- every settings change funnels through here, so persist here too
   if vim.g.colors_name then
     vim.cmd.colorscheme(vim.g.colors_name)
   else
@@ -201,6 +231,15 @@ function M.setup()
   for k, v in pairs(defaults) do
     if vim.g["colorfilter_" .. k] == nil then
       vim.g["colorfilter_" .. k] = v
+    end
+  end
+  -- Restore persisted settings over the defaults.
+  local saved = load()
+  if saved then
+    for k, v in pairs(saved) do
+      if v ~= nil then
+        vim.g["colorfilter_" .. k] = v
+      end
     end
   end
 
