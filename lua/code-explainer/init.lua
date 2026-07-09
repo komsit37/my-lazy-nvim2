@@ -181,13 +181,17 @@ local function hud(tour)
   local it = tour.items[tour.idx]
   local label = (it and (it.label or "")) or ""
   local line = string.format(" %d/%d  %s ", tour.idx, #tour.items, label)
-  local w = math.max(10, math.min(#line, vim.o.columns - 2))
+  local cwin = vim.api.nvim_win_is_valid(tour.code_win) and tour.code_win or 0
+  local w = math.max(10, math.min(#line, vim.api.nvim_win_get_width(cwin) - 2))
   if not (tour.hud_buf and vim.api.nvim_buf_is_valid(tour.hud_buf)) then
     tour.hud_buf = vim.api.nvim_create_buf(false, true)
   end
   vim.api.nvim_buf_set_lines(tour.hud_buf, 0, -1, false, { line })
+  -- Anchor to the CODE window's top-right (not the editor's), so the HUD stays
+  -- over the code column and never covers the diagram/help side split.
   local cfg = {
-    relative = "editor", anchor = "NE", row = 0, col = vim.o.columns - 1,
+    relative = "win", win = cwin, anchor = "NE", row = 0,
+    col = vim.api.nvim_win_get_width(cwin),
     width = w, height = 1, style = "minimal", focusable = false, zindex = 200, border = "rounded",
   }
   if tour.hud_win and vim.api.nvim_win_is_valid(tour.hud_win) then
