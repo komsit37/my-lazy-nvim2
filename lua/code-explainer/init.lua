@@ -117,6 +117,7 @@ local HELP_LINES = {
   " ]k / [k    next / prev step",
   " <leader>cd show full detail",
   " <CR>       jump (in list below)",
+  " <Tab> / x  toggle check (list)",
   "",
   " :CodeExplain clear     close this tab",
   " :CodeExplain clear_all close all tours",
@@ -135,6 +136,7 @@ local function open_help(tour, win)
   local buf = make_scratch("walkthrough://help/" .. tour.tab, HELP_LINES, "markdown")
   vim.bo[buf].modifiable = false
   tour.help_buf = buf
+  tour.help_win = win
   vim.api.nvim_win_set_buf(win, buf)
   vim.api.nvim_win_set_height(win, #HELP_LINES)
   vim.wo[win].winfixheight = true
@@ -500,6 +502,11 @@ function M.present(data)
     end
   end
   vim.o.equalalways = eq
+  -- Re-assert the help panel height: the loclist `wincmd J` above redistributes
+  -- column height and can squeeze the help split below its content size.
+  if tour.help_win and vim.api.nvim_win_is_valid(tour.help_win) then
+    vim.api.nvim_win_set_height(tour.help_win, #HELP_LINES)
+  end
   vim.api.nvim_set_current_win(tour.code_win)
   set_keymaps()
   M.jump(1)
