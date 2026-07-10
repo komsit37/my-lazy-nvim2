@@ -14,6 +14,7 @@
 --
 -- Tour keymaps (active while any walkthrough exists):
 --   ]k / [k  next/prev (current tab)   <leader>cd  detail (LazyVim float)
+--   <leader>ct  toggle inline detail (current tour)
 --   :CodeExplain next|prev|detail|clear|clearall
 
 local M = {}
@@ -68,6 +69,13 @@ local function item_style(it)
 end
 
 local function render_annotations(tour, data)
+  -- Re-entrant: clear any virt_lines from a previous render (e.g. a detail
+  -- toggle re-runs this) so annotations are redrawn, not stacked.
+  for bufnr, _ in pairs(tour.bufs) do
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      pcall(vim.api.nvim_buf_clear_namespace, bufnr, tour.vlns, 0, -1)
+    end
+  end
   local inline = data.inline or "virt_lines"
   local width = math.max(40, math.min(100, vim.o.columns - 12))
   local items = data.items or {}
@@ -95,7 +103,7 @@ local function render_annotations(tour, data)
       end
       if data.inline_detail and it.detail then
         for _, l in ipairs(wrap(it.detail, width - 2)) do
-          table.insert(vlines, { { "  " .. l, "Comment" } })
+          table.insert(vlines, { { "  " .. l, hl } })
         end
       end
       pcall(vim.api.nvim_buf_set_extmark, bufnr, tour.vlns, (it.line or 1) - 1, 0,
@@ -116,6 +124,7 @@ local HELP_LINES = {
   " ─────────────────────────",
   " ]k / [k    next / prev step",
   " <leader>cd show full detail",
+  " <leader>ct toggle inline detail",
   " <CR>       jump (in list below)",
   " <Tab> / x  toggle check (list)",
   "",
@@ -339,6 +348,7 @@ end
 local TOUR_KEYS = {
   { "]k", function() M.next() end, "code-explainer: next" },
   { "[k", function() M.prev() end, "code-explainer: prev" },
+  { "<leader>ct", function() M.toggle_detail() end, "code-explainer: toggle inline detail" },
 }
 
 local function set_keymaps()
@@ -408,6 +418,15 @@ function M.detail()
   vim.diagnostic.open_float(nil, { scope = "line", namespace = tour.ns, border = "rounded" })
 end
 
+-- Flip inline `detail` rendering on/off for the current tour and redraw.
+function M.toggle_detail()
+  local tour = M.current()
+  if not tour or not tour.data then return end
+  tour.data.inline_detail = not tour.data.inline_detail
+  render_annotations(tour, tour.data)
+  vim.notify("code-explainer: inline detail " .. (tour.data.inline_detail and "on" or "off"))
+end
+
 -- ── lifecycle ──────────────────────────────────────────────────────────────────
 local teardown  -- forward declaration (present() replaces an existing tour via it)
 
@@ -464,6 +483,7 @@ function M.present(data)
     pcall(function() require("config.gitdiff").set_mode(data.diff_base, { force = true, qf = false }) end)
   end
 
+  tour.data = data   -- retained so <leader>ct can toggle inline detail + re-render
   render_annotations(tour, data)
   -- Keep 'equalalways' from re-equalizing the code/side widths when the jump list
   -- is later moved full-width to the bottom via `wincmd J`.
@@ -601,7 +621,7 @@ vim.api.nvim_create_user_command("CodeExplain", function(o)
   if M[sub] then M[sub]() else vim.notify("code-explainer: unknown subcommand " .. sub, vim.log.levels.WARN) end
 end, {
   nargs = "?",
-  complete = function() return { "next", "prev", "detail", "clear", "clear_all" } end,
+  complete = function() return { "next", "prev", "detail", "toggle_detail", "clear", "clear_all" } end,
 })
 
 return M
