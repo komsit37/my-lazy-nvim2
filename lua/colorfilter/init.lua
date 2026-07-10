@@ -3,6 +3,8 @@
 -- Runs on every ColorScheme so it layers over ANY theme:
 --   * deep_black  - force large flat background areas to pure #000000 (ideal for
 --                   mini-LED / local-dimming monitors so dimming zones fully cut).
+--                   Non-current windows get lifted by `black_nc` (a near-black
+--                   grey) so the focused split reads darker than its neighbours.
 --   * gamma       - foreground lightness gamma lift l^(1/g); brightens dim colors
 --                   (comments, etc.) for contrast without washing bright ones out.
 --   * saturation  - foreground saturation multiply; makes colors more vivid.
@@ -15,11 +17,18 @@ local M = {}
 
 local BLACK = "#000000"
 
+local function grey(level)
+  return string.format("#%02x%02x%02x", level, level, level)
+end
+
 -- Only the dominant flat regions get blacked; floats/pmenu/statusline are left to
 -- the theme so those UI elements stay visually distinct from the editor.
+--
+-- Focused + shared regions go to pure #000000. The `*NC` groups (which Neovim
+-- paints on non-current windows) instead go to the `black_nc` grey, so the
+-- focused split stays the darkest thing on screen.
 local black_groups = {
   "Normal",
-  "NormalNC",
   "SignColumn",
   "LineNr",
   "LineNrAbove",
@@ -29,12 +38,16 @@ local black_groups = {
   "EndOfBuffer",
   "MsgArea",
   "NeoTreeNormal",
-  "NeoTreeNormalNC",
   "NeoTreeEndOfBuffer",
   -- Trouble's list bg (also used for gitsigns/quickfix hunk lists) links to
   -- NormalFloat, which stays bright grey here — blacken it like the editor.
   -- Trouble defines these with `default = true`, so this explicit bg wins.
   "TroubleNormal",
+}
+
+local black_nc_groups = {
+  "NormalNC",
+  "NeoTreeNormalNC",
   "TroubleNormalNC",
 }
 
@@ -44,6 +57,7 @@ local defaults = {
   gamma = 120,
   saturation = 115,
   brightness = 100,
+  black_nc = 12, -- grey level (0-40) for non-current window bg; 0 = pure black
 }
 
 -- Numeric knobs: var name, clamp range, and default (used by nudge/reset).
@@ -51,6 +65,7 @@ local fields = {
   gamma = { var = "colorfilter_gamma", min = 50, max = 250 },
   saturation = { var = "colorfilter_saturation", min = 0, max = 300 },
   brightness = { var = "colorfilter_brightness", min = 50, max = 200 },
+  black_nc = { var = "colorfilter_black_nc", min = 0, max = 40 },
 }
 
 -- ── Persistence (machine-local state file) ──────────────────────────────────
@@ -161,13 +176,18 @@ function M.apply()
     end
   end
   if vim.g.colorfilter_deep_black then
-    for _, name in ipairs(black_groups) do
-      local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
-      if ok then
-        hl.bg = BLACK
-        pcall(vim.api.nvim_set_hl, 0, name, hl)
+    local nc = grey(vim.g.colorfilter_black_nc or 0)
+    local function blacken(groups, bg)
+      for _, name in ipairs(groups) do
+        local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+        if ok then
+          hl.bg = bg
+          pcall(vim.api.nvim_set_hl, 0, name, hl)
+        end
       end
     end
+    blacken(black_groups, BLACK)
+    blacken(black_nc_groups, nc)
   end
 end
 
@@ -227,6 +247,7 @@ function M.status()
     ("saturation  %3d%%"):format(vim.g.colorfilter_saturation or 100),
     ("brightness  %3d%%"):format(vim.g.colorfilter_brightness or 100),
     ("deep black  %s"):format(vim.g.colorfilter_deep_black and "on" or "off"),
+    ("black_nc    %3d  (%s)"):format(vim.g.colorfilter_black_nc or 0, grey(vim.g.colorfilter_black_nc or 0)),
   }, "\n")
   vim.notify(msg, vim.log.levels.INFO, { title = "colorfilter" })
 end
@@ -253,7 +274,7 @@ function M.setup()
     callback = M.apply,
   })
 
-  local subs = { "toggle", "on", "off", "gamma", "saturation", "brightness", "black", "reset", "status" }
+  local subs = { "toggle", "on", "off", "gamma", "saturation", "brightness", "black", "black_nc", "reset", "status" }
   vim.api.nvim_create_user_command("ColorFilter", function(o)
     local sub, arg = o.fargs[1], o.fargs[2]
     if sub == nil or sub == "status" then
@@ -288,7 +309,7 @@ function M.setup()
     complete = function()
       return subs
     end,
-    desc = "colorfilter: toggle|on|off | gamma|saturation|brightness <pct> | black [on|off] | reset | status",
+    desc = "colorfilter: toggle|on|off | gamma|saturation|brightness <pct> | black_nc <0-40> | black [on|off] | reset | status",
   })
 
   local function map(lhs, fn, desc)
@@ -314,6 +335,12 @@ function M.setup()
   map("<leader>uvB", function()
     M.nudge("brightness", -5)
   end, "Brightness -")
+  map("<leader>uvn", function()
+    M.nudge("black_nc", 2)
+  end, "Non-focus black +")
+  map("<leader>uvN", function()
+    M.nudge("black_nc", -2)
+  end, "Non-focus black -")
   map("<leader>uvr", M.reset, "Reset colorfilter")
   map("<leader>uvo", M.status, "Show colorfilter status")
 
