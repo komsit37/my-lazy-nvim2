@@ -31,6 +31,11 @@ local black_groups = {
   "NeoTreeNormal",
   "NeoTreeNormalNC",
   "NeoTreeEndOfBuffer",
+  -- Trouble's list bg (also used for gitsigns/quickfix hunk lists) links to
+  -- NormalFloat, which stays bright grey here — blacken it like the editor.
+  -- Trouble defines these with `default = true`, so this explicit bg wins.
+  "TroubleNormal",
+  "TroubleNormalNC",
 }
 
 local defaults = {

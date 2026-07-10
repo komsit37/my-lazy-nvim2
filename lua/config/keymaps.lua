@@ -21,6 +21,19 @@ vim.keymap.set("n", "<C-w>d", "<C-w>c", { desc = "Close window", remap = true })
 vim.keymap.set("v", "<leader>y", '"+y', { desc = 'Yank to system clipboard "+y' })
 vim.keymap.set("v", "<leader>p", '"+p', { desc = 'Paste from system clipboard "+p' })
 
+-- Yank the LSP hover text under the cursor (e.g. deprecation notes) to the clipboard
+vim.keymap.set("n", "<leader>dy", function()
+  vim.lsp.buf_request(0, "textDocument/hover", vim.lsp.util.make_position_params(), function(_, res)
+    local md = res and res.contents and (res.contents.value or res.contents)
+    if md then
+      vim.fn.setreg("+", md)
+      vim.notify("Copied hover text")
+    else
+      vim.notify("No hover text under cursor", vim.log.levels.WARN)
+    end
+  end)
+end, { desc = "Yank LSP hover text" })
+
 -- For bufferline
 -- jump to buffer by number
 local wk = require("which-key")
@@ -80,6 +93,23 @@ vim.keymap.set("n", "<leader>ghi", function()
   gs.toggle_deleted()
   gs.toggle_word_diff()
 end, { desc = "Toggle inline deleted + word diff", silent = true })
+
+-- Git diff review modes: set gitsigns' base + show the diff inline (deleted
+-- lines + word diff). Re-press the same mode to turn it off. See config/gitdiff.
+-- (mode 2 assumes a clean tree; an uncommitted change also shows against HEAD~1.)
+local gitdiff = require("config.gitdiff")
+vim.keymap.set("n", "<leader>gd1", function() gitdiff.set_mode("index") end, { desc = "Diff: current (staged/unstaged)" })
+vim.keymap.set("n", "<leader>gd2", function() gitdiff.set_mode("commit") end, { desc = "Diff: last commit (HEAD~1)" })
+vim.keymap.set("n", "<leader>gd3", function() gitdiff.set_mode("mergebase") end, { desc = "Diff: merge base vs main" })
+
+-- Scriptable entry point (used by scripts and the code-explainer skill). `force`
+-- always enables the mode so the resulting state is deterministic.
+vim.api.nvim_create_user_command("GitDiffMode", function(o)
+  gitdiff.set_mode(o.args ~= "" and o.args or "index", { force = true })
+end, {
+  nargs = "?",
+  complete = function() return { "index", "commit", "mergebase", "off" } end,
+})
 
 -- Diff mode changes (built-in)
 vim.keymap.set("n", "]c", "]czz", opts) -- next diff change

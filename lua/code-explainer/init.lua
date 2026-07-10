@@ -268,20 +268,42 @@ local function build_loclist(tour, data)
   -- stored `filename` stays absolute so jumps still work.
   local base = common_dir(paths)
   local strip = base ~= "" and (base .. "/") or nil
+  -- Checklist tours prefix each row with a [ ]/[x] box driven by tour.checked;
+  -- toggle_check flips the flag and re-sets the list so this func re-renders.
+  local function loc_textfunc(info)
+    local what = vim.fn.getloclist(info.winid, { id = info.id, items = 1 })
+    local out = {}
+    for idx = info.start_idx, info.end_idx do
+      local item = what.items[idx]
+      local name = (item.bufnr and item.bufnr > 0) and vim.api.nvim_buf_get_name(item.bufnr) or ""
+      if strip and name:sub(1, #strip) == strip then name = name:sub(#strip + 1) end
+      local box = tour.checklist and (tour.checked[idx] and "[x] " or "[ ] ") or ""
+      out[#out + 1] = string.format("%s%s:%d %s", box, elide_path(name, PATH_BUDGET), item.lnum, item.text)
+    end
+    return out
+  end
+  tour.loc_items = loc
+  tour.loc_textfunc = loc_textfunc
   vim.fn.setloclist(tour.code_win, {}, " ", {
     title = data.title or "Code explainer",
     items = loc,
-    quickfixtextfunc = function(info)
-      local what = vim.fn.getloclist(info.winid, { id = info.id, items = 1 })
-      local out = {}
-      for idx = info.start_idx, info.end_idx do
-        local item = what.items[idx]
-        local name = (item.bufnr and item.bufnr > 0) and vim.api.nvim_buf_get_name(item.bufnr) or ""
-        if strip and name:sub(1, #strip) == strip then name = name:sub(#strip + 1) end
-        out[#out + 1] = string.format("%s:%d %s", elide_path(name, PATH_BUDGET), item.lnum, item.text)
-      end
-      return out
-    end,
+    quickfixtextfunc = loc_textfunc,
+  })
+end
+
+-- Flip the checkbox on loclist row `idx` (checklist tours only) and re-render the
+-- list. Re-setting the items is what forces the quickfixtextfunc to run again; we
+-- preserve the current entry so ]k/[k don't jump to the top after a toggle.
+local function toggle_check(tour, idx)
+  if not tour.checklist or idx < 1 or idx > #tour.items then return end
+  local win = tour.code_win
+  if not vim.api.nvim_win_is_valid(win) then return end
+  tour.checked[idx] = not tour.checked[idx]
+  local cur = (vim.fn.getloclist(win, { idx = 0 }) or {}).idx
+  vim.fn.setloclist(win, {}, "r", {
+    items = tour.loc_items,
+    quickfixtextfunc = tour.loc_textfunc,
+    idx = (cur and cur > 0) and cur or nil,
   })
 end
 
@@ -423,9 +445,21 @@ function M.present(data)
     code_win = vim.api.nvim_get_current_win(),
     bufs = {},
     hud_win = nil, hud_buf = nil, image = nil,
+    -- Review-list mode: render a [ ]/[x] box per loclist row, toggled with <Tab>/x.
+    checklist = data.checklist == true,
+    checked = {},
   }
   M.tours[tab] = tour
   pcall(vim.api.nvim_tabpage_set_var, tab, "walkthrough", true)
+
+  -- When the tour explains a CHANGE, the caller sets `diff_base` to the review
+  -- mode it wants ("index"|"commit"|"mergebase"); render that gitsigns diff
+  -- inline around every cited hunk. Cleared again on teardown (see below).
+  if data.diff_base and data.diff_base ~= "" then
+    tour.diff_base = data.diff_base
+    -- qf = false: the tour has its own loclist; don't open the review quickfix over it.
+    pcall(function() require("config.gitdiff").set_mode(data.diff_base, { force = true, qf = false }) end)
+  end
 
   render_annotations(tour, data)
   -- Keep 'equalalways' from re-equalizing the code/side widths when the jump list
@@ -452,6 +486,11 @@ function M.present(data)
       local function jump() M.jump(vim.fn.line(".")) end
       vim.keymap.set("n", "<CR>", jump, { buffer = lbuf, silent = true, desc = "code-explainer: jump to step" })
       vim.keymap.set("n", "o", jump, { buffer = lbuf, silent = true })
+      if tour.checklist then
+        local function toggle() toggle_check(tour, vim.fn.line(".")) end
+        vim.keymap.set("n", "<Tab>", toggle, { buffer = lbuf, silent = true, desc = "code-explainer: toggle check" })
+        vim.keymap.set("n", "x", toggle, { buffer = lbuf, silent = true, desc = "code-explainer: toggle check" })
+      end
       apply_loc_colors(w, tour.loc_hl)
       -- matches are window-local: reapply if the user closes and :lopen's again.
       vim.api.nvim_create_autocmd("BufWinEnter", {
@@ -469,6 +508,10 @@ end
 
 teardown = function(tour, close_tab)
   if not tour then return end
+  -- Restore the plain working view if this tour switched the gitsigns diff base.
+  if tour.diff_base then
+    pcall(function() require("config.gitdiff").set_mode("off") end)
+  end
   pcall(vim.diagnostic.reset, tour.ns)
   for buf in pairs(tour.bufs) do
     if vim.api.nvim_buf_is_valid(buf) then
