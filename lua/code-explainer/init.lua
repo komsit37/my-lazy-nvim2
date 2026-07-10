@@ -6,20 +6,20 @@
 --   * per-tab diagnostic namespaces driving inline virt_lines + gutter signs,
 --   * a floating progress HUD (tab-local in nvim),
 --   * an ASCII/image diagram side split,
---   * per-tab state keyed by tabpage handle, so ]w/[w/detail/clear act on the
+--   * per-tab state keyed by tabpage handle, so ]k/[k/detail/clear act on the
 --     walkthrough in the CURRENT tab.
 --
 -- The Claude skill's walkthrough.py prefers this module when present and falls
 -- back to a single-tab quickfix payload otherwise, so the skill stays portable.
 --
 -- Tour keymaps (active while any walkthrough exists):
---   ]w / [w  next/prev (current tab)   <leader>cd  detail (LazyVim float)
+--   ]k / [k  next/prev (current tab)   <leader>cd  detail (LazyVim float)
 --   :CodeExplain next|prev|detail|clear|clearall
 
 local M = {}
 
 M.tours = {}        -- [tabpage_handle] = tour
-M._saved = {}       -- saved pre-existing maps for ]w/[w
+M._saved = {}       -- saved pre-existing maps for ]k/[k
 M._keys_on = false
 
 local function wrap(text, w)
@@ -92,7 +92,7 @@ end
 local HELP_LINES = {
   " Code explainer  —  keys",
   " ─────────────────────────",
-  " ]w / [w    next / prev step",
+  " ]k / [k    next / prev step",
   " <leader>cd show full detail",
   " <CR>       jump (in list below)",
   "",
@@ -162,18 +162,61 @@ local function open_side(tour, data)
   vim.api.nvim_set_current_win(tour.code_win)
 end
 
+-- Longest common DIRECTORY prefix of a set of paths (returns "" if none).
+local function common_dir(paths)
+  if #paths == 0 then return "" end
+  local parts
+  for _, p in ipairs(paths) do
+    local segs = vim.split(p, "/", { plain = true })
+    table.remove(segs)                        -- drop the filename; keep dirs only
+    if not parts then
+      parts = segs
+    else
+      local m = 0
+      for j = 1, math.min(#parts, #segs) do
+        if parts[j] == segs[j] then m = j else break end
+      end
+      parts = { unpack(parts, 1, m) }
+    end
+  end
+  return table.concat(parts, "/")
+end
+
 local function build_loclist(tour, data)
   local items = data.items or {}
   local n = #items
   local loc = {}
+  local paths = {}
   for i, it in ipairs(items) do
+    local p = resolve(it, tour.root)
+    paths[i] = p
     loc[i] = {
-      filename = resolve(it, tour.root),
+      filename = p,
       lnum = it.line or 1, col = it.col or 1,
       text = string.format("[%d/%d] %s", i, n, it.label or ""),
     }
   end
-  vim.fn.setloclist(tour.code_win, {}, " ", { title = data.title or "Code explainer", items = loc })
+
+  -- Display paths relative to the common root shared by all steps, so the list
+  -- shows a short basename/relative path instead of a long absolute one. The
+  -- stored `filename` stays absolute so jumps still work.
+  local base = common_dir(paths)
+  local strip = base ~= "" and (base .. "/") or nil
+  vim.fn.setloclist(tour.code_win, {}, " ", {
+    title = data.title or "Code explainer",
+    items = loc,
+    quickfixtextfunc = function(info)
+      local what = vim.fn.getloclist(info.winid, { id = info.id, items = 1 })
+      local out = {}
+      for idx = info.start_idx, info.end_idx do
+        local item = what.items[idx]
+        local name = (item.bufnr and item.bufnr > 0) and vim.api.nvim_buf_get_name(item.bufnr) or ""
+        if strip and name:sub(1, #strip) == strip then name = name:sub(#strip + 1) end
+        out[#out + 1] = string.format("%s:%d %s", name, item.lnum, item.text)
+      end
+      return out
+    end,
+  })
 end
 
 local function hud(tour)
@@ -204,8 +247,8 @@ end
 
 -- ── keymaps (global, ref-counted; act on the current tab's tour) ──────────────
 local TOUR_KEYS = {
-  { "]w", function() M.next() end, "code-explainer: next" },
-  { "[w", function() M.prev() end, "code-explainer: prev" },
+  { "]k", function() M.next() end, "code-explainer: next" },
+  { "[k", function() M.prev() end, "code-explainer: prev" },
 }
 
 local function set_keymaps()
