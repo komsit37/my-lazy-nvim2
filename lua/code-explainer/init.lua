@@ -46,6 +46,27 @@ local function resolve(it, root)
   return p
 end
 
+-- Per-item color. Callers tag a step with `severity` ("error"/"warn"/"info"/
+-- "hint") to drive the gutter sign, eol text, and float color, and/or `hl` to
+-- override the inline virt_lines highlight group with anything they like (their
+-- own group or a builtin). `severity` alone also picks a sensible label color.
+local SEV = {
+  error = vim.diagnostic.severity.ERROR, e = vim.diagnostic.severity.ERROR,
+  warn = vim.diagnostic.severity.WARN, warning = vim.diagnostic.severity.WARN, w = vim.diagnostic.severity.WARN,
+  info = vim.diagnostic.severity.INFO, i = vim.diagnostic.severity.INFO,
+  hint = vim.diagnostic.severity.HINT, h = vim.diagnostic.severity.HINT,
+}
+local SEV_HL = {
+  [vim.diagnostic.severity.ERROR] = "DiagnosticVirtualTextError",
+  [vim.diagnostic.severity.WARN] = "DiagnosticVirtualTextWarn",
+  [vim.diagnostic.severity.INFO] = "DiagnosticVirtualTextInfo",
+  [vim.diagnostic.severity.HINT] = "DiagnosticVirtualTextHint",
+}
+local function item_style(it)
+  local sev = SEV[tostring(it.severity or ""):lower()] or vim.diagnostic.severity.INFO
+  return sev, it.hl or SEV_HL[sev]
+end
+
 local function render_annotations(tour, data)
   local inline = data.inline or "virt_lines"
   local width = math.max(40, math.min(100, vim.o.columns - 12))
@@ -57,19 +78,20 @@ local function render_annotations(tour, data)
     vim.fn.bufload(bufnr)
     tour.bufs[bufnr] = true
     local tag = string.format("[%d/%d] ", i, n)
+    local sev, hl = item_style(it)
 
     by_buf[bufnr] = by_buf[bufnr] or {}
     local msg = tag .. (it.label or "")
     if it.detail and #it.detail > 0 then msg = msg .. "\n\n" .. it.detail end
     table.insert(by_buf[bufnr], {
       lnum = (it.line or 1) - 1, col = (it.col or 1) - 1,
-      message = msg, severity = vim.diagnostic.severity.INFO, source = "walkthrough",
+      message = msg, severity = sev, source = "walkthrough",
     })
 
     if inline == "virt_lines" then
       local vlines = {}
       for _, l in ipairs(wrap("▸ " .. tag .. (it.label or ""), width)) do
-        table.insert(vlines, { { l, "DiagnosticVirtualTextInfo" } })
+        table.insert(vlines, { { l, hl } })
       end
       if data.inline_detail and it.detail then
         for _, l in ipairs(wrap(it.detail, width - 2)) do
@@ -182,11 +204,51 @@ local function common_dir(paths)
   return table.concat(parts, "/")
 end
 
+-- Shorten a (relative) path for display: always keep the full filename, then add
+-- trailing directory segments while they fit in `budget` chars, eliding the rest
+-- with a leading "…/". Deep package trees (Java/Scala src/main/... ) collapse to
+-- e.g. "…/event/EventOps.scala" instead of the whole path.
+local PATH_BUDGET = 32
+local function elide_path(rel, budget)
+  if #rel <= budget then return rel end
+  local segs = vim.split(rel, "/", { plain = true })
+  local acc = segs[#segs]                      -- filename, always shown in full
+  for i = #segs - 1, 1, -1 do
+    local cand = segs[i] .. "/" .. acc
+    if #cand + 2 > budget then break end       -- +2 for the "…/" prefix
+    acc = cand
+  end
+  return "…/" .. acc
+end
+
+-- Whole-line highlight per loclist row, keyed by row (== item) number. Only rows
+-- whose item opted into a color (`severity` or `hl` set) get one; plain steps keep
+-- the default quickfix rendering. Applied via matchaddpos in the loclist window
+-- (quickfix text itself carries no per-item highlight API).
+local function apply_loc_colors(win, loc_hl)
+  if not loc_hl or not vim.api.nvim_win_is_valid(win) then return end
+  vim.api.nvim_win_call(win, function()
+    pcall(vim.fn.clearmatches)
+    local groups = {}
+    for row, hl in pairs(loc_hl) do
+      groups[hl] = groups[hl] or {}
+      table.insert(groups[hl], row)
+    end
+    for hl, rows in pairs(groups) do
+      table.sort(rows)
+      for k = 1, #rows, 8 do                     -- matchaddpos: max 8 positions/call
+        pcall(vim.fn.matchaddpos, hl, { unpack(rows, k, math.min(k + 7, #rows)) }, 10)
+      end
+    end
+  end)
+end
+
 local function build_loclist(tour, data)
   local items = data.items or {}
   local n = #items
   local loc = {}
   local paths = {}
+  tour.loc_hl = {}
   for i, it in ipairs(items) do
     local p = resolve(it, tour.root)
     paths[i] = p
@@ -195,6 +257,10 @@ local function build_loclist(tour, data)
       lnum = it.line or 1, col = it.col or 1,
       text = string.format("[%d/%d] %s", i, n, it.label or ""),
     }
+    if it.severity ~= nil or it.hl ~= nil then
+      local _, hl = item_style(it)               -- same color as the inline label
+      tour.loc_hl[i] = hl
+    end
   end
 
   -- Display paths relative to the common root shared by all steps, so the list
@@ -212,7 +278,7 @@ local function build_loclist(tour, data)
         local item = what.items[idx]
         local name = (item.bufnr and item.bufnr > 0) and vim.api.nvim_buf_get_name(item.bufnr) or ""
         if strip and name:sub(1, #strip) == strip then name = name:sub(#strip + 1) end
-        out[#out + 1] = string.format("%s:%d %s", name, item.lnum, item.text)
+        out[#out + 1] = string.format("%s:%d %s", elide_path(name, PATH_BUDGET), item.lnum, item.text)
       end
       return out
     end,
@@ -362,6 +428,10 @@ function M.present(data)
   pcall(vim.api.nvim_tabpage_set_var, tab, "walkthrough", true)
 
   render_annotations(tour, data)
+  -- Keep 'equalalways' from re-equalizing the code/side widths when the jump list
+  -- is later moved full-width to the bottom via `wincmd J`.
+  local eq = vim.o.equalalways
+  vim.o.equalalways = false
   open_side(tour, data)
   build_loclist(tour, data)
   vim.api.nvim_win_call(tour.code_win, function() pcall(vim.cmd, "lopen") end)
@@ -371,11 +441,26 @@ function M.present(data)
     local info = vim.fn.getwininfo(w)[1]
     if info and info.loclist == 1 then
       local lbuf = vim.api.nvim_win_get_buf(w)
+      -- Push the jump list full-width to the very BOTTOM (spanning under both the
+      -- code and the right split), so the diagram + keys stack above it in the
+      -- right column where there's more vertical room.
+      vim.api.nvim_win_call(w, function()
+        vim.cmd("wincmd J")
+        vim.cmd("resize " .. math.max(4, math.min(12, #tour.items)))
+      end)
+      vim.wo[w].winfixheight = true
       local function jump() M.jump(vim.fn.line(".")) end
       vim.keymap.set("n", "<CR>", jump, { buffer = lbuf, silent = true, desc = "code-explainer: jump to step" })
       vim.keymap.set("n", "o", jump, { buffer = lbuf, silent = true })
+      apply_loc_colors(w, tour.loc_hl)
+      -- matches are window-local: reapply if the user closes and :lopen's again.
+      vim.api.nvim_create_autocmd("BufWinEnter", {
+        buffer = lbuf,
+        callback = function() apply_loc_colors(vim.api.nvim_get_current_win(), tour.loc_hl) end,
+      })
     end
   end
+  vim.o.equalalways = eq
   vim.api.nvim_set_current_win(tour.code_win)
   set_keymaps()
   M.jump(1)
