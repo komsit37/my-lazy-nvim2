@@ -110,6 +110,11 @@ local gitdiff = require("config.gitdiff")
 vim.keymap.set("n", "<leader>gd1", function() gitdiff.set_mode("index") end, { desc = "Diff: current (staged/unstaged)" })
 vim.keymap.set("n", "<leader>gd2", function() gitdiff.set_mode("commit") end, { desc = "Diff: last commit (HEAD~1)" })
 vim.keymap.set("n", "<leader>gd3", function() gitdiff.set_mode("mergebase") end, { desc = "Diff: merge base vs main" })
+vim.keymap.set("n", "<leader>gd4", function()
+  vim.ui.input({ prompt = "Diff vs branch/commit: " }, function(rev)
+    if rev and rev ~= "" then gitdiff.set_mode(vim.trim(rev), { force = true }) end
+  end)
+end, { desc = "Diff: vs branch/commit" })
 
 -- Scriptable entry point (used by scripts and the code-explainer skill). `force`
 -- always enables the mode so the resulting state is deterministic.

@@ -1,16 +1,18 @@
--- gitdiff — switch gitsigns' diff base between three review modes and render the
+-- gitdiff — switch gitsigns' diff base between review modes and render the
 -- diff inline (deleted lines + word-level diff) around every hunk.
 --
---   index      current diff  — working tree vs index (staged + unstaged)
---   commit     last commit   — vs HEAD~1
---   mergebase  branch diff   — vs `git merge-base <main> HEAD` (your changes off main)
+--   index       current diff  — working tree vs index (staged + unstaged)
+--   commit      last commit   — vs HEAD~1
+--   mergebase   branch diff   — vs `git merge-base <main> HEAD` (your changes off main)
+--   <revision>  ref diff      — vs any branch / tag / commit (anything else is treated
+--                               as a literal git revision, e.g. "origin/develop", a SHA)
 --
 -- Re-selecting the active mode turns it back off (plain working view). `mode`
 -- state is module-global because gitsigns' base is global to all buffers.
 --
 -- Used by:
---   * keymaps  <leader>gd1/2/3           (config/keymaps.lua)
---   * command  :GitDiffMode {mode|off}   (config/keymaps.lua)
+--   * keymaps  <leader>gd1/2/3/4         (config/keymaps.lua)
+--   * command  :GitDiffMode {mode|rev|off} (config/keymaps.lua)
 --   * AI       code-explainer honors a tour's `diff_base` field via set_mode()
 
 local M = {}
@@ -47,7 +49,15 @@ local function merge_base()
   return nil
 end
 
--- Base revision to hand gitsigns for each mode (nil = its default = index).
+-- True if `rev` names an existing commit-ish (branch, tag, or SHA).
+local function valid_rev(rev)
+  vim.fn.systemlist({ "git", "rev-parse", "--verify", "--quiet", rev .. "^{commit}" })
+  return vim.v.shell_error == 0
+end
+
+-- Base revision to hand gitsigns for each named preset (nil = its default = index).
+-- Any OTHER mode string is treated as a literal git revision to diff against —
+-- see set_mode.
 local BASE = {
   index = function() return nil end,
   commit = function() return "HEAD~1" end,
@@ -90,7 +100,9 @@ function M.off()
   vim.notify("gitdiff: off")
 end
 
--- Enable `mode` ("index"|"commit"|"mergebase"), or "off"/nil to disable.
+-- Enable `mode`, or "off"/nil to disable. `mode` is a named preset
+-- ("index"|"commit"|"mergebase") or any git revision (branch/tag/commit) to diff
+-- the working tree against, e.g. "origin/develop" or a SHA.
 -- opts.force = true always enables (no toggle-off) — used by scripts/AI so the
 -- resulting state is deterministic regardless of what was active before.
 -- opts.qf  = false suppresses the quickfix worklist (code-explainer uses its own
@@ -100,11 +112,6 @@ function M.set_mode(mode, opts)
   if mode == "off" or mode == nil then
     return M.off()
   end
-  local base_fn = BASE[mode]
-  if not base_fn then
-    vim.notify("gitdiff: unknown mode " .. tostring(mode), vim.log.levels.ERROR)
-    return
-  end
   local g = gitsigns()
   if not g then return end
 
@@ -112,14 +119,28 @@ function M.set_mode(mode, opts)
     return M.off()
   end
 
-  local base = base_fn()
-  if mode == "mergebase" and not base then
-    vim.notify("gitdiff: could not resolve merge base with main", vim.log.levels.WARN)
+  -- Resolve the base revision: a named preset, or otherwise a literal git
+  -- revision (branch/tag/commit) to diff against.
+  local base, label
+  local base_fn = BASE[mode]
+  if base_fn then
+    base = base_fn()
+    if mode == "mergebase" and not base then
+      vim.notify("gitdiff: could not resolve merge base with main", vim.log.levels.WARN)
+      return
+    end
+    label = (LABEL[mode] or mode) .. (base and (" (" .. base .. ")") or "")
+  elseif valid_rev(mode) then
+    base = mode
+    label = "vs " .. mode
+  else
+    vim.notify("gitdiff: unknown mode / unknown revision " .. tostring(mode), vim.log.levels.ERROR)
     return
   end
+
   apply(g, base, true, opts.qf ~= false)
   M.mode = mode
-  vim.notify("gitdiff: " .. (LABEL[mode] or mode) .. (base and (" (" .. base .. ")") or ""))
+  vim.notify("gitdiff: " .. label)
 end
 
 return M

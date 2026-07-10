@@ -455,8 +455,9 @@ function M.present(data)
   pcall(vim.api.nvim_tabpage_set_var, tab, "walkthrough", true)
 
   -- When the tour explains a CHANGE, the caller sets `diff_base` to the review
-  -- mode it wants ("index"|"commit"|"mergebase"); render that gitsigns diff
-  -- inline around every cited hunk. Cleared again on teardown (see below).
+  -- mode it wants — a preset ("index"|"commit"|"mergebase") or any git revision
+  -- (branch/tag/commit, e.g. "origin/develop" or a SHA) to diff against; render
+  -- that gitsigns diff inline around every cited hunk. Cleared on teardown (below).
   if data.diff_base and data.diff_base ~= "" then
     tour.diff_base = data.diff_base
     -- qf = false: the tour has its own loclist; don't open the review quickfix over it.
