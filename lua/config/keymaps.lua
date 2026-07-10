@@ -2,6 +2,8 @@
 -- Default keymaps that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/keymaps.lua
 -- Add any additional keymaps here
 
+local opts = { noremap = true, silent = true }
+
 -- Don't let small deletes overwrite your last yank
 vim.keymap.set("n", "x", '"_x', opts) -- delete char (no yank)
 vim.keymap.set("n", "X", '"_X', opts) -- delete backward char (no yank)
@@ -26,7 +28,16 @@ vim.keymap.set("n", "<leader>dy", function()
   vim.lsp.buf_request(0, "textDocument/hover", vim.lsp.util.make_position_params(), function(_, res)
     local md = res and res.contents and (res.contents.value or res.contents)
     if md then
-      vim.fn.setreg("+", md)
+      -- Strip markdown: drop code-fence lines, unwrap inline `code`/**bold**, trim blank edges
+      local lines = {}
+      for _, line in ipairs(vim.split(md, "\n", { plain = true })) do
+        if not line:match("^%s*```") and not line:match("^%s*%-%-%-%s*$") then
+          line = line:gsub("`([^`]*)`", "%1"):gsub("%*%*([^%*]*)%*%*", "%1")
+          table.insert(lines, line)
+        end
+      end
+      local text = vim.trim(table.concat(lines, "\n"))
+      vim.fn.setreg("+", text)
       vim.notify("Copied hover text")
     else
       vim.notify("No hover text under cursor", vim.log.levels.WARN)
@@ -55,8 +66,6 @@ end
 -- Drop this into (for example):
 --   ~/.config/nvim/lua/config/keymaps.lua
 -- or in LazyVim: lua/config/keymaps.lua (it gets loaded automatically)
-
-local opts = { noremap = true, silent = true }
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Core vertical movement centering (you already have most of this)
