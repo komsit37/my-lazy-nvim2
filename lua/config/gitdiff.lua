@@ -11,9 +11,10 @@
 -- state is module-global because gitsigns' base is global to all buffers.
 --
 -- Used by:
---   * keymaps  <leader>gd1/2/3/4         (config/keymaps.lua)
+--   * keymaps  <leader>gd1/2/3/4/5       (config/keymaps.lua)
 --   * command  :GitDiffMode {mode|rev|off} (config/keymaps.lua)
 --   * AI       code-explainer honors a tour's `diff_base` field via set_mode()
+--   * Trouble  plugins/trouble.lua wires trouble_hunk_formatter into its qf modes
 
 local M = {}
 
@@ -141,6 +142,78 @@ function M.set_mode(mode, opts)
   apply(g, base, true, opts.qf ~= false)
   M.mode = mode
   vim.notify("gitdiff: " .. label)
+end
+
+-- ── Hunk-kind coloring for the quickfix worklist ──────────────────────────
+-- Worklist entries read "Added   (-x +y): …" / "Removed …" / "Changed …".
+-- The kind word gets a background tint in the matching gitsigns sign color,
+-- so the code text next to it stays readable with its own highlighting. The
+-- groups are derived from the colorscheme (and re-derived when it changes);
+-- they are used both by the plain-quickfix matches below and by Trouble's
+-- hunk_text formatter — matches can't reach Trouble's window.
+
+local hunk_kind_hl =
+  { Added = "HunkKindAdded", Removed = "HunkKindRemoved", Changed = "HunkKindChanged" }
+-- Fallback chains mirror how gitsigns derives its own groups — the GitSigns*
+-- groups only exist once gitsigns has loaded (and not every colorscheme
+-- defines them), so fall through to the diff groups, then a fixed color.
+local hunk_kind_src = {
+  HunkKindAdded = { "GitSignsAdd", "GitGutterAdd", "diffAdded", "DiffAdd", 0x2ea043 },
+  HunkKindChanged = { "GitSignsChange", "GitGutterChange", "diffChanged", "DiffChange", 0xd29922 },
+  HunkKindRemoved = { "GitSignsDelete", "GitGutterDelete", "diffRemoved", "DiffDelete", 0xf85149 },
+}
+local function set_hunk_kind_hl()
+  local normal_bg = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg or 0x000000
+  for group, srcs in pairs(hunk_kind_src) do
+    local color
+    for _, src in ipairs(srcs) do
+      color = type(src) == "number" and src
+        or vim.api.nvim_get_hl(0, { name = src, link = false }).fg
+      if color then
+        break
+      end
+    end
+    vim.api.nvim_set_hl(0, group, { bg = color, fg = normal_bg })
+  end
+end
+set_hunk_kind_hl()
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = vim.api.nvim_create_augroup("gitdiff_hunk_kind_hl", { clear = true }),
+  callback = set_hunk_kind_hl,
+})
+-- Matches are window-local and FileType only fires once per buffer, so also
+-- hook BufWinEnter to cover the qf buffer re-shown in a fresh window.
+vim.api.nvim_create_autocmd({ "FileType", "BufWinEnter" }, {
+  group = vim.api.nvim_create_augroup("gitdiff_qf_hunk_colors", { clear = true }),
+  callback = function()
+    if vim.bo.filetype ~= "qf" or vim.w.gitdiff_hunk_matches then
+      return
+    end
+    vim.w.gitdiff_hunk_matches = true
+    for kind, hl in pairs(hunk_kind_hl) do
+      vim.fn.matchadd(hl, [[\<]] .. kind .. [[\ze\s\+(-\d]])
+    end
+  end,
+})
+
+-- Trouble renders list text itself (window matches / qf syntax never reach
+-- it), so it needs a formatter instead: split the entry into kind + hunk
+-- header + code line — the kind gets the tint, and the code keeps Trouble's
+-- treesitter highlighting (hl = "ts" is resolved to the item buffer's
+-- language by the renderer). For anything else return nil so the caller's
+-- `|text:ts` fallback keeps Trouble's default rendering. Wired into
+-- Trouble's formatter pipeline by plugins/trouble.lua.
+function M.trouble_hunk_formatter(ctx)
+  local text = tostring(ctx.item.text or "")
+  local kind, header, code = text:match("^(%a+)(%s+%(%-%d.-%):%s?)(.*)$")
+  if not (kind and hunk_kind_hl[kind]) then
+    return
+  end
+  return {
+    { text = kind, hl = hunk_kind_hl[kind] },
+    { text = header },
+    { text = code, hl = "ts" },
+  }
 end
 
 return M
