@@ -6,7 +6,29 @@ return {
   end,
   -- for nixos:
   -- build = "nix run .#release",
+  init = function()
+    -- FFF windows point at these dedicated groups (see opts.hl) so colorfilter
+    -- can blacken the picker without touching other floats. Default links keep
+    -- the stock float look when colorfilter is off; re-linked on every
+    -- ColorScheme because :hi clear wipes them.
+    local links = { FFFNormal = "NormalFloat", FFFBorder = "FloatBorder", FFFTitle = "Title" }
+    local function link()
+      for group, target in pairs(links) do
+        vim.api.nvim_set_hl(0, group, { link = target, default = true })
+      end
+    end
+    vim.api.nvim_create_autocmd("ColorScheme", {
+      group = vim.api.nvim_create_augroup("fff_hl_links", { clear = true }),
+      callback = link,
+    })
+    link()
+  end,
   opts = {
+    hl = {
+      normal = "FFFNormal",
+      border = "FFFBorder",
+      title = "FFFTitle",
+    },
     debug = {
       enabled = true,
       show_scores = true,

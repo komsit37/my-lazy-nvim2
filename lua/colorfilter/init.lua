@@ -21,8 +21,10 @@ local function grey(level)
   return string.format("#%02x%02x%02x", level, level, level)
 end
 
--- Only the dominant flat regions get blacked; floats/pmenu/statusline are left to
--- the theme so those UI elements stay visually distinct from the editor.
+-- Only the dominant flat regions get blacked; small floats/pmenu/statusline are
+-- left to the theme so those UI elements stay visually distinct from the editor.
+-- Near-fullscreen floats (snacks/fff pickers) count as dominant regions and are
+-- blackened too.
 --
 -- Focused + shared regions go to pure #000000. The `*NC` groups (which Neovim
 -- paints on non-current windows) instead go to the `black_nc` grey, so the
@@ -43,6 +45,29 @@ local black_groups = {
   -- NormalFloat, which stays bright grey here — blacken it like the editor.
   -- Trouble defines these with `default = true`, so this explicit bg wins.
   "TroubleNormal",
+  -- Snacks picker: a near-fullscreen float whose bg follows NormalFloat.
+  -- SnacksPicker is the main surface (Box/Input/List/Preview variants link to
+  -- it); the rest carry explicit theme bgs (e.g. monokai-pro's sideBar grey on
+  -- borders/titles). Snacks defines its groups with `default = true`, so these
+  -- explicit bgs win. Title/border *variants* (SnacksPickerListTitle, …) are
+  -- deliberately omitted: they link to the groups below and defining them here
+  -- while undefined would sever that link and drop the theme's title fg.
+  "SnacksPicker",
+  "SnacksPickerInput",
+  "SnacksPickerBorder",
+  "SnacksPickerInputBorder",
+  "SnacksPickerTitle",
+  "SnacksPickerPrompt",
+  "SnacksPickerTree",
+  -- fff picker: its windows point at these dedicated groups via opts.hl in
+  -- plugins/fff.lua (default-linked there to NormalFloat/FloatBorder/Title).
+  -- The table form { group, source } makes blacken() rebuild the group from
+  -- the source's current attrs instead of its own — these groups exist only
+  -- as colorfilter targets, and ColorScheme autocmd ordering vs fff's default
+  -- links is otherwise unpredictable.
+  { "FFFNormal", "NormalFloat" },
+  { "FFFBorder", "FloatBorder" },
+  { "FFFTitle", "Title" },
 }
 
 local black_nc_groups = {
@@ -159,6 +184,34 @@ local function transform(fg, gfactor, sfactor, bfactor)
 end
 
 -- ── Apply / refresh ────────────────────────────────────────────────────────
+-- The deep-black step alone. Split out from M.apply because it is idempotent
+-- (unlike the fg transforms, which would compound) and so can be re-asserted
+-- after themes that paint plugin highlights lazily, post-ColorScheme.
+local function apply_black()
+  if not (vim.g.colorfilter_enabled and vim.g.colorfilter_deep_black) then
+    return
+  end
+  local nc = grey(vim.g.colorfilter_black_nc or 0)
+  local function blacken(groups, bg)
+    for _, entry in ipairs(groups) do
+      local name, source = entry, nil
+      if type(entry) == "table" then
+        name, source = entry[1], entry[2]
+      end
+      -- Sourced entries are colorfilter-owned groups: always rebuild them from
+      -- the source's current attrs so the result is independent of whether the
+      -- default link (or a stale bg-only definition) is in place when we run.
+      local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = source or name, link = false })
+      if ok then
+        hl.bg = bg
+        pcall(vim.api.nvim_set_hl, 0, name, hl)
+      end
+    end
+  end
+  blacken(black_groups, BLACK)
+  blacken(black_nc_groups, nc)
+end
+
 -- Repaint highlights for the current theme. Called from the ColorScheme autocmd.
 function M.apply()
   if not vim.g.colorfilter_enabled then
@@ -175,20 +228,7 @@ function M.apply()
       end
     end
   end
-  if vim.g.colorfilter_deep_black then
-    local nc = grey(vim.g.colorfilter_black_nc or 0)
-    local function blacken(groups, bg)
-      for _, name in ipairs(groups) do
-        local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
-        if ok then
-          hl.bg = bg
-          pcall(vim.api.nvim_set_hl, 0, name, hl)
-        end
-      end
-    end
-    blacken(black_groups, BLACK)
-    blacken(black_nc_groups, nc)
-  end
+  apply_black()
 end
 
 -- Reload the theme so transforms recompute from original colors (no compounding);
@@ -269,9 +309,19 @@ function M.setup()
     end
   end
 
+  local group = vim.api.nvim_create_augroup("colorfilter", { clear = true })
   vim.api.nvim_create_autocmd("ColorScheme", {
-    group = vim.api.nvim_create_augroup("colorfilter", { clear = true }),
+    group = group,
     callback = M.apply,
+  })
+  -- On startup LazyVim loads the colorscheme before other start plugins, and
+  -- themes like monokai-pro defer plugin highlights until that plugin's module
+  -- loads (e.g. SnacksPicker* land when snacks loads — after our ColorScheme
+  -- pass above). Re-assert the black bgs once startup is fully done.
+  vim.api.nvim_create_autocmd("VimEnter", {
+    group = group,
+    once = true,
+    callback = apply_black,
   })
 
   local subs = { "toggle", "on", "off", "gamma", "saturation", "brightness", "black", "black_nc", "reset", "status" }
